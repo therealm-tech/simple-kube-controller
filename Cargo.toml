@@ -1,0 +1,33 @@
+[dependencies]
+futures = "0"
+k8s-openapi = {version = "0", features = ["latest"]}
+kube = {version = "0", features = ["runtime"]}
+serde = "1"
+thiserror = "2"
+tokio = {version = "1", features = ["sync"]}
+tracing = "0"
+
+[dev-dependencies]
+tokio = {version = "1", features = ["macros", "rt-multi-thread", "signal"]}
+tracing-subscriber = {version = "0", features = ["env-filter"]}
+
+[features]
+dag = []
+default = ["dag"]
+
+[package]
+authors = ["Guillaume Leroy <gleroy@therealm.tech>"]
+description = "Library to streamline the process of developing custom Kubernetes controllers."
+documentation = "https://docs.rs/simple-kube-controller"
+edition = "2021"
+keywords = ["kubernetes", "controller", "operator"]
+license-file = "LICENSE"
+name = "simple-kube-controller"
+readme = "README.md"
+repository = "https://github.com/therealm-tech/simple-kube-controller"
+resolver = "2"
+version = "0.1.0-dev"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

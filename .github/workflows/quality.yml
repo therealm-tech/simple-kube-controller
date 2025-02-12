@@ -1,0 +1,47 @@
+name: Quality
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  push:
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: set up rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-key: cargo_pre-commit_1.84.1_${{ hashFiles('Cargo.lock') }}
+          components: clippy, rustfmt
+          toolchain: 1.84.1
+
+      - name: run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: set up rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-key: cargo_test_1.84.1_${{ hashFiles('Cargo.lock') }}
+          toolchain: 1.84.1
+
+      - name: test
+        run: cargo test

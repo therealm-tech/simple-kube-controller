@@ -1,0 +1,36 @@
+name: Release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: set up rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-key: cargo_publish_1.84.1_${{ hashFiles('Cargo.lock') }}
+          toolchain: 1.84.1
+
+      - name: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --all-features
+
+      - name: create release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
