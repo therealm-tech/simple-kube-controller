@@ -31,6 +31,9 @@ macro_rules! record_resource_metadata {
 }
 pub(crate) use record_resource_metadata;
 
+pub type OnErrorFn<CONTEXT, ERROR, RESOURCE> =
+    dyn Fn(Arc<RESOURCE>, &ERROR, Arc<CONTEXT>) -> Action + Send + Sync;
+
 /// Error when the controller is stopped.
 #[derive(Debug, thiserror::Error)]
 pub enum StopError {
@@ -45,28 +48,56 @@ pub enum StopError {
 }
 
 /// A configuration.
-#[derive(Clone, Default, Debug)]
-pub struct Config {
+pub struct Config<
+    CONTEXT: Send + Sync,
+    ERROR: std::error::Error + Send + Sync,
+    RESOURCE: Clone + Debug + DeserializeOwned + Resource<DynamicType = ()> + Send + Sync,
+> {
     /// The controller configuration.
-    pub controller: ControllerConfig,
+    pub controller: ControllerConfig<CONTEXT, ERROR, RESOURCE>,
     /// The watcher configuration.
     pub watcher: kube::runtime::watcher::Config,
 }
 
+impl<
+        CONTEXT: Send + Sync,
+        ERROR: std::error::Error + Send + Sync,
+        RESOURCE: Clone + Debug + DeserializeOwned + Resource<DynamicType = ()> + Send + Sync,
+    > Default for Config<CONTEXT, ERROR, RESOURCE>
+{
+    fn default() -> Self {
+        Self {
+            controller: Default::default(),
+            watcher: Default::default(),
+        }
+    }
+}
+
 /// A controller configuration.
-#[derive(Clone, Debug)]
-pub struct ControllerConfig {
+pub struct ControllerConfig<
+    CONTEXT: Send + Sync,
+    ERROR: std::error::Error + Send + Sync,
+    RESOURCE: Clone + Debug + DeserializeOwned + Resource<DynamicType = ()> + Send + Sync,
+> {
     // If defined, add automatically finalizer if it is not present on the resource.
     pub finalizer: Option<String>,
     /// Action to do when an error occurred. By default, the event is requeued for 10s.
     pub on_error: Action,
+    /// Function to execute when an error occurred.
+    pub on_error_fn: Option<Box<OnErrorFn<CONTEXT, ERROR, RESOURCE>>>,
 }
 
-impl Default for ControllerConfig {
+impl<
+        CONTEXT: Send + Sync,
+        ERROR: std::error::Error + Send + Sync,
+        RESOURCE: Clone + Debug + DeserializeOwned + Resource<DynamicType = ()> + Send + Sync,
+    > Default for ControllerConfig<CONTEXT, ERROR, RESOURCE>
+{
     fn default() -> Self {
         Self {
             finalizer: None,
             on_error: Action::requeue(Duration::from_secs(10)),
+            on_error_fn: None,
         }
     }
 }
@@ -134,7 +165,7 @@ impl<
         api: Api<RESOURCE>,
         rec: RECONCILER,
         ctx: Arc<CONTEXT>,
-        cfg: Config,
+        cfg: Config<CONTEXT, ERROR, RESOURCE>,
     ) -> Self {
         let ctx = Arc::new(Context::new(rec, ctx, cfg.controller, api.clone()));
         let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
@@ -218,7 +249,17 @@ impl<
         ctx: Arc<Context<CONTEXT, ERROR, RECONCILER, RESOURCE>>,
     ) -> Action {
         record_resource_metadata!(res.meta());
-        ctx.config.on_error.clone()
+        error!("{err}");
+        match err {
+            ReconcileError::App(err) => {
+                if let Some(on_error_fn) = &ctx.config.on_error_fn {
+                    on_error_fn(res, err, ctx.global.clone())
+                } else {
+                    ctx.config.on_error.clone()
+                }
+            }
+            _ => ctx.config.on_error.clone(),
+        }
     }
 
     #[instrument(
@@ -299,10 +340,9 @@ struct Context<
     RESOURCE: Clone + Debug + DeserializeOwned + Resource<DynamicType = ()> + Send + Sync,
 > {
     api: Api<RESOURCE>,
-    config: ControllerConfig,
+    config: ControllerConfig<CONTEXT, ERROR, RESOURCE>,
     global: Arc<CONTEXT>,
     reconciler: RECONCILER,
-    _err: PhantomData<ERROR>,
 }
 
 impl<
@@ -312,13 +352,17 @@ impl<
         RESOURCE: Clone + Debug + DeserializeOwned + Resource<DynamicType = ()> + Send + Sync,
     > Context<CONTEXT, ERROR, RECONCILER, RESOURCE>
 {
-    fn new(rec: RECONCILER, ctx: Arc<CONTEXT>, cfg: ControllerConfig, api: Api<RESOURCE>) -> Self {
+    fn new(
+        rec: RECONCILER,
+        ctx: Arc<CONTEXT>,
+        cfg: ControllerConfig<CONTEXT, ERROR, RESOURCE>,
+        api: Api<RESOURCE>,
+    ) -> Self {
         Self {
             api,
             config: cfg,
             global: ctx,
             reconciler: rec,
-            _err: PhantomData,
         }
     }
 }
