@@ -302,6 +302,8 @@ impl<
                     finalizers.push(finalizer.clone());
                     let meta = ObjectMeta {
                         finalizers: Some(finalizers),
+                        name: Some(name.clone()),
+                        namespace: meta.namespace.clone(),
                         ..Default::default()
                     };
                     let partial = meta.into_request_partial::<RESOURCE>();
