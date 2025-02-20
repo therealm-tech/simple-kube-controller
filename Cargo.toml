@@ -26,7 +26,7 @@ name = "simple-kube-controller"
 readme = "README.md"
 repository = "https://github.com/therealm-tech/simple-kube-controller"
 resolver = "2"
-version = "0.2.0-dev"
+version = "0.2.0"
 
 [package.metadata.docs.rs]
 all-features = true
