@@ -237,7 +237,7 @@ impl<
             resource.name,
             resource.namespace,
         ),
-        skip(res, ctx)
+        skip(res, err, ctx)
     )]
     fn on_error<
         CONTEXT: Send + Sync,
